@@ -1,6 +1,16 @@
+/*
+    modbus rtu master api
+    author : qixiaochen
+    date : 2021.6.14
+    按照modbus标准协议，一个寄存器长度为16位半字；
+    api只负责打包命令数据帧和解析数据帧中的值；
+    modbus是一种可一对多的协议，通过station站号区分从站
+    可以打包或者解析uint16_t,int32,char三种数据类型
+*/
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+
 
 /* Table of CRC values for high–order byte */
 const uint8_t crctablehi[] = {
@@ -68,12 +78,12 @@ uint16_t usMBCRC16(uint8_t *ptr, uint32_t len)
 /*
     生成modbusrtu读取保持寄存器命令的字节数组，通过串口，tcp或者蓝牙发送字节数组命令
     sendbuf:最终要发送的字节数组
-    sendlen:最终要发送的字节数组长度
     station:目标站号
     address:目标地址
     len    :目标长度
+    返回值: 最终要发送的字节数组长度
 */
-void read_mudbus_holding_register_massage(uint8_t *sendbuf,uint16_t sendlen,uint8_t station,uint16_t address,uint16_t len)
+int read_mudbus_holding_register_massage(uint8_t *sendbuf,uint8_t station,uint16_t address,uint16_t len)
 {
     sendbuf[0]=station;
     sendbuf[1]=3;
@@ -84,99 +94,106 @@ void read_mudbus_holding_register_massage(uint8_t *sendbuf,uint16_t sendlen,uint
     uint16_t crc=usMBCRC16(sendbuf,6);
     sendbuf[6]=crc&0xff;
     sendbuf[7]=(crc>>8)&0xff;
-    sendlen=8;
+    return 8;
 }
 /*
-    生成modbusrtu写入保持寄存器命令的字节数组，通过串口，tcp或者蓝牙发送字节数组命令
+    生成modbusrtu写入保持寄存器命令的字节数组，通过串口，tcp或者蓝牙发送字节数组命令（半字）
     sendbuf:最终要发送的字节数组
-    sendlen:最终要发送的字节数组长度
     station:目标站号
     address:目标地址
     len    :目标长度，两个字节为一个长度
     writebuf:要写入的数据数组,uint16_t型
+    返回值: 最终要发送的字节数组长度
 */
-void write_mudbus_holding_register_massage_uint16(uint8_t *sendbuf,uint16_t sendlen,uint8_t station,uint16_t address,uint16_t len,uint16_t *writebuf)
+int write_mudbus_holding_register_massage_uint16(uint8_t *sendbuf,uint8_t station,uint16_t address,uint16_t len,uint16_t *writebuf)
 {
     int i = 0;
     sendbuf[0]=station;
-    sendbuf[1]=3;
+    sendbuf[1]=0x10;
     sendbuf[2]=(address>>8)&0xff;
     sendbuf[3]=address&0xff;
     sendbuf[4]=(len>>8)&0xff;
     sendbuf[5]=len&0xff;
-    sendbuf[6]=(len*2)&0xff;
+    sendbuf[6]=len*2;
     for (i = 0; i < len; i++)
     {
-        sendbuf[6+i*2]=(writebuf[i]>>8)&0xff;
-        sendbuf[6+i*2+1]=writebuf[i]&0xff;
+        sendbuf[7+i*2]=(writebuf[i]>>8)&0xff;
+        sendbuf[7+i*2+1]=writebuf[i]&0xff;
     }
     
     uint16_t crc=usMBCRC16(sendbuf,7+len*2);
     sendbuf[7+len*2]=crc&0xff;
     sendbuf[7+len*2+1]=(crc>>8)&0xff;
-    sendlen=7+len*2+2;
+    return 7+len*2+2;
 }
 /*
-    生成modbusrtu写入保持寄存器命令的字节数组，通过串口，tcp或者蓝牙发送字节数组命令
+    生成modbusrtu写入保持寄存器命令的字节数组，通过串口，tcp或者蓝牙发送字节数组命令（字）
     sendbuf:最终要发送的字节数组
-    sendlen:最终要发送的字节数组长度
     station:目标站号
     address:目标地址
     len    :目标长度，两个字节为一个长度，一个int32两个长度
     writebuf:要写入的数据数组,int32型
+    返回值: 最终要发送的字节数组长度
 */
-void write_mudbus_holding_register_massage_int32(uint8_t *sendbuf,uint16_t sendlen,uint8_t station,uint16_t address,uint16_t len,int32_t *writebuf)
+int write_mudbus_holding_register_massage_int32(uint8_t *sendbuf,uint8_t station,uint16_t address,uint16_t len,int32_t *writebuf)
 {
     int i = 0;
     sendbuf[0]=station;
-    sendbuf[1]=3;
+    sendbuf[1]=0x10;
     sendbuf[2]=(address>>8)&0xff;
     sendbuf[3]=address&0xff;
     sendbuf[4]=(len>>8)&0xff;
     sendbuf[5]=len&0xff;
-    sendbuf[6]=(len*2)&0xff;
+    sendbuf[6]=len*2;
     for (i = 0; i < len/2; i++)
     {
-        sendbuf[6+i*4]=(writebuf[i]>>8)&0xff;
-        sendbuf[6+i*4+1]=writebuf[i]&0xff;
-        sendbuf[6+i*4+2]=(writebuf[i]>>24)&0xff;
-        sendbuf[6+i*4+3]=(writebuf[i]>>16)&0xff;
+        sendbuf[7+i*4]=(writebuf[i]>>8)&0xff;
+        sendbuf[7+i*4+1]=writebuf[i]&0xff;
+        sendbuf[7+i*4+2]=(writebuf[i]>>24)&0xff;
+        sendbuf[7+i*4+3]=(writebuf[i]>>16)&0xff;
     }
     
     uint16_t crc=usMBCRC16(sendbuf,7+len*2);
     sendbuf[7+len*2]=crc&0xff;
     sendbuf[7+len*2+1]=(crc>>8)&0xff;
-    sendlen=7+len*2+2;
+    return 7+len*2+2;
 }
 /*
-    生成modbusrtu写入保持寄存器命令的字节数组，通过串口，tcp或者蓝牙发送字节数组命令
+    生成modbusrtu写入保持寄存器命令的字节数组，通过串口，tcp或者蓝牙发送字节数组命令（字节）
     sendbuf:最终要发送的字节数组
-    sendlen:最终要发送的字节数组长度
     station:目标站号
     address:目标地址
     len    :目标长度，两个字节为一个长度，一个int32两个长度
     writebuf:要写入的数据数组,char型
+    返回值: 最终要发送的字节数组长度
 */
-void write_mudbus_holding_register_massage_char(uint8_t *sendbuf,uint16_t sendlen,uint8_t station,uint16_t address,uint16_t len,char *writebuf)
+int write_mudbus_holding_register_massage_char(uint8_t *sendbuf,uint8_t station,uint16_t address,uint16_t len,char *writebuf)
 {
     int i = 0;
     sendbuf[0]=station;
-    sendbuf[1]=3;
+    sendbuf[1]=0x10;
     sendbuf[2]=(address>>8)&0xff;
     sendbuf[3]=address&0xff;
     sendbuf[4]=(len>>8)&0xff;
     sendbuf[5]=len&0xff;
-    sendbuf[6]=(len*2)&0xff;
+    sendbuf[6]=len*2;
     for (i = 0; i < len; i++)
     {
-        sendbuf[6+i*2]=writebuf[i*2+1];
-        sendbuf[6+i*2+1]=writebuf[i*2];
+        sendbuf[7+i*2]=writebuf[i*2+1];
+        sendbuf[7+i*2+1]=writebuf[i*2];
     }
     uint16_t crc=usMBCRC16(sendbuf,7+len*2);
     sendbuf[7+len*2]=crc&0xff;
     sendbuf[7+len*2+1]=(crc>>8)&0xff;
-    sendlen=7+len*2+2;
+    return 7+len*2+2;
 }
+/*
+    解析写寄存器后的返回值
+    reply_buf:返回值数据帧
+    reply_len:返回值数据帧长度
+    station:返回值站号
+    返回值: 错误值
+*/
 int write_mudbus_holding_register_reply(uint8_t *reply_buf,uint16_t reply_len,uint8_t station)
 {
     uint16_t crc=0;
@@ -193,7 +210,16 @@ int write_mudbus_holding_register_reply(uint8_t *reply_buf,uint16_t reply_len,ui
     {
         return -3;
     }
+    return 0;
 }
+/*
+    解析读取寄存器命令数据（半字）
+    rcv_buf:原始数据帧
+    rcv_len:数据帧长度
+    station:返回值站号
+    holding_register:解析出的数据
+    返回值: 错误值
+*/
 int analysis_read_recevice_to_uint16(uint8_t *rcv_buf,uint16_t rcv_len,uint8_t station,uint16_t *holding_register)
 {
     int i = 0;
@@ -219,6 +245,14 @@ int analysis_read_recevice_to_uint16(uint8_t *rcv_buf,uint16_t rcv_len,uint8_t s
     }
     return holding_register_len;
 }
+/*
+    解析读取寄存器命令数据（字）
+    rcv_buf:原始数据帧
+    rcv_len:数据帧长度
+    station:返回值站号
+    holding_register:解析出的数据
+    返回值: 错误值
+*/
 int analysis_read_recevice_to_int32(uint8_t *rcv_buf,uint16_t rcv_len,uint8_t station,int32_t *holding_register)
 {
     int i = 0;
@@ -244,6 +278,14 @@ int analysis_read_recevice_to_int32(uint8_t *rcv_buf,uint16_t rcv_len,uint8_t st
     }
     return holding_register_len;
 }
+/*
+    解析读取寄存器命令数据（字节）
+    rcv_buf:原始数据帧
+    rcv_len:数据帧长度
+    station:返回值站号
+    holding_register:解析出的数据
+    返回值: 错误值
+*/
 int analysis_read_recevice_to_char(uint8_t *rcv_buf,uint16_t rcv_len,uint8_t station,char *holding_register)
 {
     int i = 0;
@@ -263,6 +305,10 @@ int analysis_read_recevice_to_char(uint8_t *rcv_buf,uint16_t rcv_len,uint8_t sta
         return -3;
     }
     holding_register_len=rcv_buf[2];
-    memcpy(holding_register,rcv_buf+3,holding_register_len);
+    for (i = 0; i < holding_register_len/2; i++)
+    {
+        holding_register[i*2] = rcv_buf[3 + i * 2 + 1];
+        holding_register[i*2+1] = rcv_buf[3 + i * 2];
+    }
     return holding_register_len;
 }
